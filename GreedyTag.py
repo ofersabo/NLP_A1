@@ -114,8 +114,8 @@ def get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag):
 def getScore(word, tag, prev_tag, prev_prev_tag):
     e_proba = np.log(emision_probability(word,tag))
     q_proba = get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag)
-    q_proba = np.sum(np.array(q_proba) * np.array(lambda_interpolation))
-    q_proba = np.log(q_proba)
+    q_proba = np.log(np.array(q_proba) * np.array(lambda_interpolation))
+    q_proba = np.sum(q_proba)
     return e_proba + q_proba
 
 
