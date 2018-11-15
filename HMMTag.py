@@ -1,18 +1,20 @@
 import numpy as np
 import sys
+import time
 lambda_interpolation = [0.8,0.15,0.05]
 all_states = set()
 special_tags = set([".","$","``",'(',')',"''",',',':','#','``'])
 tags_to_go_over = all_states - special_tags
 # word_to_state_probability = {}
 end_early = -1
-skip_start =0
+skip_start = 0
 from collections import Counter
 unigram = {}
 bigram = {}
 trigram = {}
 emission = {}
 deno = 'denominator'
+
 
 
 def create_denominator():
@@ -146,8 +148,6 @@ def find_backwars_tags(trellis):
     tags_list = []
     current_tuple = find_max_in_trellis_word(last_line)
     for back in range(len(trellis)):
-        if back == 21:
-            print
         tags_list.insert(0, current_tuple[1])
         prev_prev = trellis[-(1+back)][current_tuple][0]
         current_tuple = (prev_prev, current_tuple[0])
@@ -383,6 +383,9 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time.time()
     main()
+    end = time.time()
+    print"time is %f"%(end - start)
 
 
