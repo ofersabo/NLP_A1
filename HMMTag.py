@@ -1,21 +1,34 @@
 import numpy as np
 import sys
 import time
+from utilities import *
 lambda_interpolation = [0.8,0.15,0.05]
 all_states = set()
 special_tags = set([".","$","``",'(',')',"''",',',':','#','``'])
 tags_to_go_over = all_states - special_tags
 # word_to_state_probability = {}
-end_early = -1
-skip_start = 0
+end_early = -900
+skip_start = 600
 from collections import Counter
 unigram = {}
 bigram = {}
 trigram = {}
 emission = {}
+rare_words_emission = {}
 deno = 'denominator'
+should_be_trusted = 7
 
+def create_emission_for_rare_words():
+    for e in emission:
+        number_of_appearnces  = sum(emission[e].values())
+        if number_of_appearnces < 5 and not check_if_number(e):
+            for t in emission[e].keys():
+                if not rare_words_emission.has_key(t):
+                    rare_words_emission[t] = 0
 
+                rare_words_emission[t] += 1
+
+    print rare_words_emission
 
 def create_denominator():
     global tags_to_go_over
@@ -29,7 +42,8 @@ def create_denominator():
     all_value = unigram.values()
     sum_all = sum(all_value)
     unigram[deno] = sum_all
-
+    all_value = rare_words_emission.values()
+    rare_words_emission[deno] = sum(all_value)
 
 def add_to_emission(all_parts):
     w = all_parts[0]
@@ -43,6 +57,8 @@ def add_to_emission(all_parts):
 def create_emission(e_file):
     for line in open(e_file):
         all_parts = line.strip().replace("\t", " ").split(" ")
+        if len(all_parts) < 3:
+            print
         add_to_emission(all_parts)
 
 
@@ -81,21 +97,61 @@ def create_transition(q_file):
             exit()
 
 
-def handle_no_tag_per_word():
-    return 1e-16
+def handle_no_tag_per_word(word,tag):
+    if emission[word][deno] > 4:
+        return 1e-36
+    else:
+        return 1e-5
+
+def probability_by_feature(feature,tag):
+    d = (emission[feature][deno])
+    if not emission[feature].has_key(tag):
+        return 0.01 / d
+    n = float(emission[feature][tag])
+    return n / d
 
 
-def handle_unknown_word():
-    return 1
+def handle_unknown_word(word,tag,feature):
+    if word.isupper():
+        lower_word = word.lower()
+        if (emission.has_key(lower_word) and emission[lower_word][deno] > 5):
+            if not tag in emission[lower_word]:
+                lower_prob = (handle_no_tag_per_word(lower_word, tag))
+            else:
+                lower_prob = float(emission[lower_word][tag]) / emission[lower_word][deno]
+
+            return lower_prob
+
+    if not rare_words_emission.has_key(tag):
+        rare_prob = 1e-10
+    else:
+        rare_prob = float(rare_words_emission[tag]) / rare_words_emission[deno]
+
+    if feature =="":
+        return rare_prob
+    else:
+        return probability_by_feature(feature,tag)/2 + rare_prob/2
 
 
 def emision_probability(word,tag):
+    feature = find_convetion_type(word)
     if not word in emission:
-        return handle_unknown_word()
-    elif not tag in emission[word]:
-        return handle_no_tag_per_word()
+        return (handle_unknown_word(word,tag,feature),False)
 
-    return float(emission[word][tag] / float(emission[word][deno]))
+    count = emission[word][deno]
+
+    if not tag in emission[word]:
+        return (handle_no_tag_per_word(word,tag), count > should_be_trusted)
+
+    if feature == "":
+        return (float(emission[word][tag] / float(emission[word][deno])) , count > should_be_trusted)
+    else:
+        e_prob = float(emission[word][tag]) / count
+        if count < 15:
+            f_prob = probability_by_feature(feature,tag)
+            return 0.5 * f_prob + 0.5 * e_prob, count > should_be_trusted
+
+        return e_prob, count > should_be_trusted
 
 
 def get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag):
@@ -119,11 +175,15 @@ def get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag):
 
 
 def getScore(word, tag, prev_tag, prev_prev_tag):
-    e_proba = np.log(emision_probability(word,tag))
+    e_proba, trust = emision_probability(word,tag)
+    e_proba = np.log(e_proba)
     q_proba = get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag)
-    q_proba = np.log(np.array(q_proba) * np.array(lambda_interpolation))
-    q_proba = np.sum(q_proba)
-    return e_proba + q_proba
+    q_proba = np.sum(np.array(q_proba) * np.array(lambda_interpolation))
+    q_proba = np.log(q_proba)
+    if trust:
+        return 0.5 * e_proba + 0.5 * q_proba
+    else:
+        return 0.2 * e_proba + 0.8 * q_proba
 
 
 def write_to_output_file(output_file_name,text):
@@ -164,9 +224,6 @@ def synthesize_sentence(words,tags_list):
     result_sentence += "\n"
 
     return result_sentence
-
-def check_if_number(s):
-    return s.replace('.','',1).replace(',',' ').isdigit()
 
 
 def check_low_emission_number(s):
@@ -256,17 +313,13 @@ def viterbi_decoder(words,prev_prev_tag,prev_tag):
     trellis = [{}]
     knwon_one_backwords = False
     if len(words) > 0:
-        if is_special_case(trellis,words[0],0,words,prev_tag,prev_prev_tag):
-            knwon_one_backwords = True
-        else:
+        if not is_special_case(trellis,words[0],0,words,prev_tag,prev_prev_tag):
             for tag in tags_to_go_over:
                 insert_into_trellis(trellis,words[0],tag,prev_tag,prev_prev_tag)
 
     if len(words) > 1:
         trellis.append({})
-        if is_special_case(trellis,words[1],1,words,prev_tag,prev_prev_tag):
-            knwon_one_backwords = True
-        else:
+        if not is_special_case(trellis,words[1],1,words,prev_tag,prev_prev_tag):
             for tag in tags_to_go_over:
                 insert_into_trellis(trellis, words[1], tag, prev_tag, prev_prev_tag)
 
@@ -310,7 +363,7 @@ def find_answer(input_file_name,output_file_name,extra_file_name):
     text[-1] = text[-1][:-1]
     write_to_output_file(output_file_name, text)
 
-def evaulate_result(output_file_name):
+def evaulate_result(output_file_name,extra_file_name):
     text = []
     for i, line in enumerate(open(output_file_name)):
         text.append(line.strip())
@@ -319,7 +372,8 @@ def evaulate_result(output_file_name):
     bad  = 0.0
     wrong_tags= []
     true_tags = []
-
+    wrong_lines = []
+    wrong_words = []
     from MLETrain import extract_pos
     for i,correct_line in enumerate(file("ass1-tagger-test")):
         if i < skip_start: continue
@@ -333,8 +387,12 @@ def evaulate_result(output_file_name):
             else:
                 wrong_tags.append(my_pos[j])
                 true_tags.append(correct[j])
+                wrong_words.append(text[i-skip_start].split(" ")[j])
         good += how_many_corrct
         bad += len(my_pos) - how_many_corrct
+        if len(my_pos) - how_many_corrct > 0:
+            wrong_lines.append(text[i-skip_start] + "\n")
+
         if i  == skip_start + end_early:
             break
     print ("good")
@@ -353,8 +411,9 @@ def evaulate_result(output_file_name):
     print (zip(true_tags,wrong_tags))
     print ("wrong")
     # print (wrong)
-    print uni.most_common()
-
+    # print uni.most_common()
+    print wrong_words
+    write_to_output_file(extra_file_name,wrong_lines)
 
 def main():
 # input_file_name q_mle_filename e_mle_filename output_file_name extra_file_name
@@ -366,6 +425,7 @@ def main():
 
     create_transition(q_mle_filename)
     create_emission(e_mle_filename)
+    create_emission_for_rare_words()
     create_denominator()
     find_answer(input_file_name,output_file_name,extra_file_name)
 
@@ -379,7 +439,7 @@ def main():
     # tags_list = find_backwars_tags(trellis)
 
     print ("Evaluate")
-    evaulate_result(output_file_name)
+    evaulate_result(output_file_name,extra_file_name)
 
 
 if __name__ == '__main__':

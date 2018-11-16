@@ -1,7 +1,6 @@
 import sys
 from collections import Counter
-
-
+from utilities import *
 def read_data(fname):
     data = []
     for line in open(fname,"r"):
@@ -17,20 +16,20 @@ def _add_value_to_dict(d , key, value):
         d[key].update([value])
 
 
+def add_convetion(emission, word, pos):
+    feature = find_convetion_type(word)
+    if feature != "": _add_value_to_dict(emission, feature, pos)
+
+
 def update_Emle_with_line(emission,value):
     words = value.strip().split(" ")
     for word in words:
-        try:
-            w, pos = word.split("/")
-            _add_value_to_dict(emission, w, pos)
-        except ValueError:
-            all_parts = word.split("/")
-            pos = all_parts[-1]
-            for i in range(len(all_parts)-1):
-                _add_value_to_dict(emission,all_parts[i],pos)
+        all_parts = word.split("/")
+        pos = all_parts[-1]
+        for i in range(len(all_parts)-1):
+            _add_value_to_dict(emission,all_parts[i],pos)
+            add_convetion(emission, all_parts[i], pos)
 
-    # pattern = re.compile("\/([^\s]+)")
-    # result = re.findall(pattern, value)
 
 
 
@@ -64,6 +63,8 @@ def write_E_mle_to_flie(e_mle_filename):
     f = open(e_mle_filename,"w")
     for word in emission:
         for pos in emission[word]:
+            if emission[word][pos] == 8004:
+                print "9004"
             str_to_flie = str(word) + " " + str(pos) + "\t" + str(emission[word][pos])+ "\n"
             f.write(str_to_flie)
 
@@ -105,7 +106,6 @@ def main():
     input_file_name  = sys.argv[1] if len(sys.argv) > 1 else "ass1-tagger-train"
     q_mle_filename   = sys.argv[2] if len(sys.argv) > 2 else "q.mle"
     e_mle_filename   = sys.argv[3] if len(sys.argv) > 3 else "e.mle"
-    print (e_mle_filename)
     with open(input_file_name) as f:
         for text_line in f:
             update_Qmle_with_line(text_line)
@@ -113,7 +113,6 @@ def main():
 
     write_Q_mle_to_flie(q_mle_filename)
     write_E_mle_to_flie(e_mle_filename)
-
 
 if __name__ == '__main__':
     main()

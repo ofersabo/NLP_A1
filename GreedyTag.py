@@ -114,8 +114,8 @@ def get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag):
 def getScore(word, tag, prev_tag, prev_prev_tag):
     e_proba = np.log(emision_probability(word,tag))
     q_proba = get_three_bi_uni_gram(tag, prev_tag, prev_prev_tag)
-    q_proba = np.log(np.array(q_proba) * np.array(lambda_interpolation))
-    q_proba = np.sum(q_proba)
+    q_proba = np.sum(np.array(q_proba) * np.array(lambda_interpolation))
+    q_proba = np.log(q_proba)
     return e_proba + q_proba
 
 
@@ -183,7 +183,7 @@ def main():
     input_file_name  = sys.argv[1] if len(sys.argv) > 1 else "ass1-tagger-test-input"
     q_mle_filename   = sys.argv[2] if len(sys.argv) > 2 else "q.mle"
     e_mle_filename   = sys.argv[3] if len(sys.argv) > 3 else "e.mle"
-    output_file_name = sys.argv[4] if len(sys.argv) > 4 else "outpot.txt"
+    output_file_name = sys.argv[4] if len(sys.argv) > 4 else "emp.txt"
     extra_file_name  = sys.argv[5] if len(sys.argv) > 5 else "extra.txt"
 
     create_transition(q_mle_filename)
